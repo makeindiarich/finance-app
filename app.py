@@ -1,108 +1,108 @@
 import dash
-from dash import dcc, html
-from dash.dependencies import Input, Output
-import pandas as pd
+from dash import dcc, html, Input, Output
+import plotly.graph_objects as go
 import numpy as np
-import plotly.express as px
 
-# ----------------------------
-# App Setup
-# ----------------------------
+# Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
-server = app.server  # for deployment (Heroku, Render, etc.)
+server = app.server   # Required for Render deployment
 
 # ----------------------------
 # Layout
 # ----------------------------
 app.layout = html.Div(
-    style={"backgroundColor": "#111111", "color": "white", "padding": "20px"},
+    style={"display": "flex", "height": "100vh", "backgroundColor": "#121212", "color": "white", "fontFamily": "Arial"},
     children=[
-        html.H1("💰 Long-Term Wealth & Cash Flow Planner", style={"textAlign": "center"}),
 
-        # Inputs
-        html.Div([
-            html.Label("Initial Investment (₹):"),
-            dcc.Input(id="initial_investment", type="number", value=100000, style={"marginBottom": "10px"}),
+        # Left Sidebar - Inputs
+        html.Div(
+            style={"width": "30%", "padding": "30px", "backgroundColor": "#1e1e1e", "boxShadow": "2px 0px 5px rgba(0,0,0,0.5)"},
+            children=[
+                html.H2("💰 Finance Planner", style={"color": "#FFD700", "textAlign": "center"}),
 
-            html.Label("Monthly Investment (₹):"),
-            dcc.Input(id="monthly_investment", type="number", value=10000, style={"marginBottom": "10px"}),
+                html.Label("Initial Investment (₹)", style={"marginTop": "15px"}),
+                dcc.Input(id="initial_invest", type="number", value=500000, style={"width": "100%", "padding": "10px"}),
 
-            html.Label("Expected Annual Return (%):"),
-            dcc.Slider(id="expected_return", min=1, max=20, step=0.5, value=12,
-                       marks={i: f"{i}%" for i in range(1, 21)}),
+                html.Label("Monthly Contribution (₹)", style={"marginTop": "15px"}),
+                dcc.Input(id="monthly_invest", type="number", value=20000, style={"width": "100%", "padding": "10px"}),
 
-            html.Label("Investment Duration (Years):"),
-            dcc.Slider(id="years", min=1, max=50, step=1, value=20,
-                       marks={i: str(i) for i in range(0, 55, 5)})
-        ], style={"padding": "20px", "backgroundColor": "#222222", "borderRadius": "10px"}),
+                html.Label("Expected Annual Return (%)", style={"marginTop": "15px"}),
+                dcc.Input(id="annual_return", type="number", value=10, style={"width": "100%", "padding": "10px"}),
 
-        html.Br(),
+                html.Label("Inflation Rate (%)", style={"marginTop": "15px"}),
+                dcc.Input(id="inflation_rate", type="number", value=6, style={"width": "100%", "padding": "10px"}),
 
-        # Charts
-        dcc.Graph(id="wealth_chart"),
-        dcc.Graph(id="compare_chart"),
+                html.Label("Monthly Expenses (₹)", style={"marginTop": "15px"}),
+                dcc.Input(id="monthly_expense", type="number", value=40000, style={"width": "100%", "padding": "10px"}),
 
-        # Summary
-        html.Div(id="summary", style={"textAlign": "center", "marginTop": "20px", "fontSize": "20px"})
+                html.Label("Investment Horizon (Years)", style={"marginTop": "15px"}),
+                dcc.Input(id="years", type="number", value=20, style={"width": "100%", "padding": "10px"}),
+
+                html.Div(id="summary", style={"marginTop": "20px", "fontSize": "18px", "color": "#90EE90"})
+            ]
+        ),
+
+        # Right Side - Graphs
+        html.Div(
+            style={"width": "70%", "padding": "30px"},
+            children=[
+                dcc.Graph(id="wealth_graph", style={"height": "45vh"}),
+                dcc.Graph(id="cashflow_graph", style={"height": "45vh"})
+            ]
+        )
     ]
 )
 
+
 # ----------------------------
-# Callback for calculations
+# Callbacks
 # ----------------------------
 @app.callback(
-    [Output("wealth_chart", "figure"),
-     Output("compare_chart", "figure"),
+    [Output("wealth_graph", "figure"),
+     Output("cashflow_graph", "figure"),
      Output("summary", "children")],
-    [Input("initial_investment", "value"),
-     Input("monthly_investment", "value"),
-     Input("expected_return", "value"),
+    [Input("initial_invest", "value"),
+     Input("monthly_invest", "value"),
+     Input("annual_return", "value"),
+     Input("inflation_rate", "value"),
+     Input("monthly_expense", "value"),
      Input("years", "value")]
 )
-def update_projection(initial_investment, monthly_investment, expected_return, years):
+def update_graphs(initial_invest, monthly_invest, annual_return, inflation_rate, monthly_expense, years):
     months = years * 12
-    monthly_rate = expected_return / 100 / 12
+    rate = (annual_return / 100) / 12
+    inflation = (inflation_rate / 100) / 12
 
-    wealth = []
-    cashflow = []
+    # Wealth projection
+    wealth = [initial_invest]
+    for m in range(1, months + 1):
+        prev = wealth[-1]
+        future = prev * (1 + rate) + monthly_invest
+        wealth.append(future)
 
-    future_value = initial_investment
-    for month in range(1, months + 1):
-        future_value = future_value * (1 + monthly_rate) + monthly_investment
-        wealth.append(future_value)
-        cashflow.append(monthly_investment * month + initial_investment)
+    # Expenses projection (adjusted for inflation)
+    expenses = []
+    for m in range(months + 1):
+        adj_expense = monthly_expense * ((1 + inflation) ** m)
+        expenses.append(adj_expense)
 
-    df = pd.DataFrame({
-        "Month": range(1, months + 1),
-        "Wealth Projection": wealth,
-        "Cash Invested": cashflow
-    })
-    df["Year"] = df["Month"] / 12
+    # Wealth Graph
+    fig1 = go.Figure()
+    fig1.add_trace(go.Scatter(y=wealth, mode="lines", name="Projected Wealth", line=dict(color="#FFD700", width=3)))
+    fig1.update_layout(title="📈 Wealth Projection", paper_bgcolor="#121212", plot_bgcolor="#121212",
+                       font=dict(color="white"), xaxis=dict(showgrid=False), yaxis=dict(showgrid=False))
 
-    # Chart 1: Wealth over time
-    fig1 = px.line(df, x="Year", y="Wealth Projection", title="Projected Wealth Over Time")
-    fig1.update_layout(template="plotly_dark", xaxis_title="Years", yaxis_title="₹ Value")
+    # Cashflow Graph
+    fig2 = go.Figure()
+    fig2.add_trace(go.Scatter(y=expenses, mode="lines", name="Monthly Expenses", line=dict(color="#FF6347", width=3)))
+    fig2.update_layout(title="💸 Expense Growth (Inflation Adjusted)", paper_bgcolor="#121212", plot_bgcolor="#121212",
+                       font=dict(color="white"), xaxis=dict(showgrid=False), yaxis=dict(showgrid=False))
 
-    # Chart 2: Wealth vs Cash
-    fig2 = px.line(df, x="Year", y=["Wealth Projection", "Cash Invested"],
-                   title="Wealth vs Cash Invested")
-    fig2.update_layout(template="plotly_dark", xaxis_title="Years", yaxis_title="₹ Value")
+    summary = f"After {years} years, projected wealth ≈ ₹{wealth[-1]:,.0f}"
 
-    # Summary
-    total_invested = cashflow[-1]
-    projected_wealth = wealth[-1]
-    profit = projected_wealth - total_invested
-    summary_text = [
-        html.P(f"💵 Total Invested: ₹{total_invested:,.0f}"),
-        html.P(f"📈 Projected Wealth: ₹{projected_wealth:,.0f}"),
-        html.P(f"💡 Profit / Gains: ₹{profit:,.0f}")
-    ]
-
-    return fig1, fig2, summary_text
+    return fig1, fig2, summary
 
 
-# ----------------------------
-# Run App
-# ----------------------------
+# Run app locally
 if __name__ == "__main__":
     app.run_server(debug=True)
