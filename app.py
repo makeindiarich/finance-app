@@ -2,11 +2,53 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-st.set_page_config(page_title="Financial Planner", layout="wide")
+# ---- PAGE CONFIG ----
+st.set_page_config(
+    page_title="Financial Planner",
+    page_icon="💰",
+    layout="wide"
+)
 
-st.title("📊 Personal Financial Planner")
+# ---- CUSTOM DARK THEME CSS ----
+st.markdown(
+    """
+    <style>
+    /* Global background */
+    .stApp {
+        background-color: #0E1117;
+        color: #FAFAFA;
+    }
 
-# ---- Sidebar Inputs ----
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background-color: #1E1E2F;
+    }
+
+    /* Titles */
+    h1, h2, h3 {
+        color: #00C896;
+    }
+
+    /* Metrics color */
+    div[data-testid="stMetricValue"] {
+        color: #00C896;
+        font-weight: bold;
+    }
+
+    /* Dataframe */
+    .dataframe td, .dataframe th {
+        color: white !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# ---- APP TITLE ----
+st.title("💰 Personal Financial Planner")
+st.caption("Project your long-term wealth, cash flows, and loans — in style.")
+
+# ---- SIDEBAR INPUTS ----
 st.sidebar.header("Income")
 salary = st.sidebar.number_input("Annual Salary (₹)", min_value=0, value=800000, step=50000)
 bonus = st.sidebar.number_input("Annual Bonus (₹)", min_value=0, value=100000, step=10000)
@@ -37,7 +79,7 @@ loan_years = st.sidebar.slider("Loan Tenure (years)", 0, 30, 0)
 st.sidebar.header("Projection Settings")
 horizon = st.sidebar.slider("Projection Horizon (years)", 5, 50, 30)
 
-# ---- Simulation ----
+# ---- SIMULATION ----
 years = list(range(0, horizon + 1))
 
 # Income projection
@@ -78,15 +120,17 @@ df = pd.DataFrame({
 })
 df["Total Wealth"] = df["Cash"] + df["Debt"] + df["Equity"] + df["RealEstate"]
 
-# ---- Dashboard ----
+# ---- DASHBOARD ----
 st.subheader("📈 Wealth Projection")
 st.line_chart(df.set_index("Year")[["Cash","Debt","Equity","RealEstate","Total Wealth"]])
 
 st.subheader("💰 Cash Flow Projection")
 st.bar_chart(df.set_index("Year")[["Income","Expenses","Net Cash Flow"]])
 
-st.subheader("📊 Summary (Year 0 vs Year End)")
+st.subheader("📊 Summary (Start vs End)")
 col1, col2 = st.columns(2)
 col1.metric("Starting Wealth", f"₹{df['Total Wealth'].iloc[0]:,.0f}")
 col2.metric("Wealth After Horizon", f"₹{df['Total Wealth'].iloc[-1]:,.0f}")
+
+st.subheader("📑 Detailed Projection")
 st.dataframe(df.style.format("{:,.0f}"))
