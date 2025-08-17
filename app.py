@@ -1,136 +1,108 @@
-import streamlit as st
+import dash
+from dash import dcc, html
+from dash.dependencies import Input, Output
 import pandas as pd
 import numpy as np
+import plotly.express as px
 
-# ---- PAGE CONFIG ----
-st.set_page_config(
-    page_title="Financial Planner",
-    page_icon="💰",
-    layout="wide"
+# ----------------------------
+# App Setup
+# ----------------------------
+app = dash.Dash(__name__, suppress_callback_exceptions=True)
+server = app.server  # for deployment (Heroku, Render, etc.)
+
+# ----------------------------
+# Layout
+# ----------------------------
+app.layout = html.Div(
+    style={"backgroundColor": "#111111", "color": "white", "padding": "20px"},
+    children=[
+        html.H1("💰 Long-Term Wealth & Cash Flow Planner", style={"textAlign": "center"}),
+
+        # Inputs
+        html.Div([
+            html.Label("Initial Investment (₹):"),
+            dcc.Input(id="initial_investment", type="number", value=100000, style={"marginBottom": "10px"}),
+
+            html.Label("Monthly Investment (₹):"),
+            dcc.Input(id="monthly_investment", type="number", value=10000, style={"marginBottom": "10px"}),
+
+            html.Label("Expected Annual Return (%):"),
+            dcc.Slider(id="expected_return", min=1, max=20, step=0.5, value=12,
+                       marks={i: f"{i}%" for i in range(1, 21)}),
+
+            html.Label("Investment Duration (Years):"),
+            dcc.Slider(id="years", min=1, max=50, step=1, value=20,
+                       marks={i: str(i) for i in range(0, 55, 5)})
+        ], style={"padding": "20px", "backgroundColor": "#222222", "borderRadius": "10px"}),
+
+        html.Br(),
+
+        # Charts
+        dcc.Graph(id="wealth_chart"),
+        dcc.Graph(id="compare_chart"),
+
+        # Summary
+        html.Div(id="summary", style={"textAlign": "center", "marginTop": "20px", "fontSize": "20px"})
+    ]
 )
 
-# ---- CUSTOM DARK THEME CSS ----
-st.markdown(
-    """
-    <style>
-    /* Global background */
-    .stApp {
-        background-color: #0E1117;
-        color: #FAFAFA;
-    }
-
-    /* Sidebar */
-    section[data-testid="stSidebar"] {
-        background-color: #1E1E2F;
-    }
-
-    /* Titles */
-    h1, h2, h3 {
-        color: #00C896;
-    }
-
-    /* Metrics color */
-    div[data-testid="stMetricValue"] {
-        color: #00C896;
-        font-weight: bold;
-    }
-
-    /* Dataframe */
-    .dataframe td, .dataframe th {
-        color: white !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
+# ----------------------------
+# Callback for calculations
+# ----------------------------
+@app.callback(
+    [Output("wealth_chart", "figure"),
+     Output("compare_chart", "figure"),
+     Output("summary", "children")],
+    [Input("initial_investment", "value"),
+     Input("monthly_investment", "value"),
+     Input("expected_return", "value"),
+     Input("years", "value")]
 )
+def update_projection(initial_investment, monthly_investment, expected_return, years):
+    months = years * 12
+    monthly_rate = expected_return / 100 / 12
 
-# ---- APP TITLE ----
-st.title("💰 Personal Financial Planner")
-st.caption("Project your long-term wealth, cash flows, and loans — in style.")
+    wealth = []
+    cashflow = []
 
-# ---- SIDEBAR INPUTS ----
-st.sidebar.header("Income")
-salary = st.sidebar.number_input("Annual Salary (₹)", min_value=0, value=800000, step=50000)
-bonus = st.sidebar.number_input("Annual Bonus (₹)", min_value=0, value=100000, step=10000)
-rent_income = st.sidebar.number_input("Annual Rent Income (₹)", min_value=0, value=0, step=10000)
-dividends = st.sidebar.number_input("Annual Dividends (₹)", min_value=0, value=0, step=10000)
-income_growth = st.sidebar.slider("Income Growth % per year", 0.0, 15.0, 5.0)
+    future_value = initial_investment
+    for month in range(1, months + 1):
+        future_value = future_value * (1 + monthly_rate) + monthly_investment
+        wealth.append(future_value)
+        cashflow.append(monthly_investment * month + initial_investment)
 
-st.sidebar.header("Expenses")
-expenses = st.sidebar.number_input("Annual Expenses (₹)", min_value=0, value=400000, step=50000)
-expense_inflation = st.sidebar.slider("Expense Inflation %", 0.0, 15.0, 6.0)
+    df = pd.DataFrame({
+        "Month": range(1, months + 1),
+        "Wealth Projection": wealth,
+        "Cash Invested": cashflow
+    })
+    df["Year"] = df["Month"] / 12
 
-st.sidebar.header("Assets")
-cash_start = st.sidebar.number_input("Cash & Bank (₹)", 0, 1000000, 200000)
-equity_start = st.sidebar.number_input("Equity Investments (₹)", 0, 5000000, 500000)
-debt_start = st.sidebar.number_input("Debt / FD (₹)", 0, 5000000, 200000)
-real_estate = st.sidebar.number_input("Real Estate Value (₹)", 0, 10000000, 0)
+    # Chart 1: Wealth over time
+    fig1 = px.line(df, x="Year", y="Wealth Projection", title="Projected Wealth Over Time")
+    fig1.update_layout(template="plotly_dark", xaxis_title="Years", yaxis_title="₹ Value")
 
-return_cash = st.sidebar.slider("Cash Return %", 0.0, 10.0, 3.0)
-return_equity = st.sidebar.slider("Equity Return %", 0.0, 20.0, 12.0)
-return_debt = st.sidebar.slider("Debt Return %", 0.0, 15.0, 7.0)
-return_real = st.sidebar.slider("Real Estate Growth %", 0.0, 15.0, 5.0)
+    # Chart 2: Wealth vs Cash
+    fig2 = px.line(df, x="Year", y=["Wealth Projection", "Cash Invested"],
+                   title="Wealth vs Cash Invested")
+    fig2.update_layout(template="plotly_dark", xaxis_title="Years", yaxis_title="₹ Value")
 
-st.sidebar.header("Loan")
-loan_amt = st.sidebar.number_input("Loan Amount (₹)", 0, 10000000, 0, step=50000)
-loan_rate = st.sidebar.slider("Loan Interest %", 0.0, 20.0, 8.0)
-loan_years = st.sidebar.slider("Loan Tenure (years)", 0, 30, 0)
+    # Summary
+    total_invested = cashflow[-1]
+    projected_wealth = wealth[-1]
+    profit = projected_wealth - total_invested
+    summary_text = [
+        html.P(f"💵 Total Invested: ₹{total_invested:,.0f}"),
+        html.P(f"📈 Projected Wealth: ₹{projected_wealth:,.0f}"),
+        html.P(f"💡 Profit / Gains: ₹{profit:,.0f}")
+    ]
 
-st.sidebar.header("Projection Settings")
-horizon = st.sidebar.slider("Projection Horizon (years)", 5, 50, 30)
+    return fig1, fig2, summary_text
 
-# ---- SIMULATION ----
-years = list(range(0, horizon + 1))
 
-# Income projection
-income = [(salary + bonus + rent_income + dividends) * ((1 + income_growth/100) ** yr) for yr in years]
-# Expense projection
-expenses_proj = [expenses * ((1 + expense_inflation/100) ** yr) for yr in years]
-# Loan EMI
-emi = 0
-if loan_amt > 0 and loan_years > 0:
-    n = loan_years * 12
-    r = loan_rate/100/12
-    emi = loan_amt * r * (1 + r) ** n / ((1 + r) ** n - 1)
-annual_emi = emi * 12
-
-# Wealth buckets
-cash, equity, debt, real = [cash_start], [equity_start], [debt_start], [real_estate]
-
-for yr in range(1, horizon+1):
-    net_cf = income[yr] - expenses_proj[yr] - annual_emi
-    # Assume 50% net CF to equity, 30% debt, 20% cash
-    eq_new = equity[-1] * (1 + return_equity/100) + 0.5 * net_cf
-    debt_new = debt[-1] * (1 + return_debt/100) + 0.3 * net_cf
-    cash_new = cash[-1] * (1 + return_cash/100) + 0.2 * net_cf
-    real_new = real[-1] * (1 + return_real/100)
-
-    equity.append(eq_new); debt.append(debt_new); cash.append(cash_new); real.append(real_new)
-
-# Combine results
-df = pd.DataFrame({
-    "Year": years,
-    "Income": income,
-    "Expenses": expenses_proj,
-    "Net Cash Flow": np.array(income) - np.array(expenses_proj) - annual_emi,
-    "Cash": cash,
-    "Debt": debt,
-    "Equity": equity,
-    "RealEstate": real
-})
-df["Total Wealth"] = df["Cash"] + df["Debt"] + df["Equity"] + df["RealEstate"]
-
-# ---- DASHBOARD ----
-st.subheader("📈 Wealth Projection")
-st.line_chart(df.set_index("Year")[["Cash","Debt","Equity","RealEstate","Total Wealth"]])
-
-st.subheader("💰 Cash Flow Projection")
-st.bar_chart(df.set_index("Year")[["Income","Expenses","Net Cash Flow"]])
-
-st.subheader("📊 Summary (Start vs End)")
-col1, col2 = st.columns(2)
-col1.metric("Starting Wealth", f"₹{df['Total Wealth'].iloc[0]:,.0f}")
-col2.metric("Wealth After Horizon", f"₹{df['Total Wealth'].iloc[-1]:,.0f}")
-
-st.subheader("📑 Detailed Projection")
-st.dataframe(df.style.format("{:,.0f}"))
+# ----------------------------
+# Run App
+# ----------------------------
+if __name__ == "__main__":
+    app.run_server(debug=True)
