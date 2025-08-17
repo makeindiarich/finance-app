@@ -1,5 +1,5 @@
 from dash import Dash, dcc, html, Input, Output
-import dash_auth
+#import dash_auth
 from layouts import home, cashflow, expenses
 
 # --- Setup App ---
@@ -11,7 +11,7 @@ VALID_USERNAME_PASSWORD_PAIRS = {
     "admin": "password123",
     "guest": "guest123"
 }
-auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
+#auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
 
 # --- Router ---
 app.layout = html.Div([
